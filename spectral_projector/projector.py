@@ -36,15 +36,38 @@ class SpectralProjector(odl.Operator):
             The weighting of each part of the spectrum.
         mu : `array-like`
             Attenuation at each energy. Same size as ``spectrum``
+
+        Examples
+        --------
+        Create a ODL `RayTransform`
+
+        >>> import odl
+        >>> space = odl.uniform_discr([-1, -1], [1, 1], [50, 50])
+        >>> apart = odl.uniform_partition(0, 3.1415, 100)
+        >>> dpart = odl.uniform_partition(-2, 2, 100)
+        >>> geom = odl.tomo.Parallel2dGeometry(apart, dpart)
+        >>> ray_trafo = odl.tomo.RayTransform(space, geom)
+
+        Create the `SpectralProjector`
+
+        >>> sigma = [0.5, 0.5]
+        >>> mu = [0.5, 1.5]
+        >>> SpectralProjector(ray_trafo, sigma, mu)
         """
+        odl.tomo.RayTransform
         self.ray_transform = ray_transform
         self.mu = np.asarray(mu)
         self.sigma = np.asarray(sigma)
         odl.Operator.__init__(self, ray_transform.domain, ray_transform.range,
                               linear=False)
 
-    def _call(self, x):
-        Ahatrho = self.ray_transform(x)
+    def _call(self, x, **kwargs):
+
+        # Optimization to avoid double computations in derivative
+        if 'Ahatrho' in kwargs:
+            Ahatrho = kwargs.pop('Ahatrho')
+        else:
+            Ahatrho = self.ray_transform(x)
 
         result = self.range.zero()
         for s, m in zip(self.sigma, self.mu):
@@ -54,8 +77,8 @@ class SpectralProjector(odl.Operator):
 
     def derivative(self, point):
         """Derivative w.r.t. the data."""
-        Arho = self(point)
         Ahatrho = self.ray_transform(point)
+        Arho = self(point, Ahatrho=Ahatrho)
 
         result = self.range.zero()
         for s, m in zip(self.sigma, self.mu):

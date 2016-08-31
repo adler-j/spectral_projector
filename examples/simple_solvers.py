@@ -20,8 +20,8 @@ ray_trafo = odl.tomo.RayTransform(reco_space, geometry, impl='astra_cuda')
 ray_trafo *= 0.3
 
 # Spectrum
-sigma = [0.25, 0.25, 0.25, 0.25]
-mu = [0.3, 0.7, 1.2, 1.7]
+sigma = [0.5, 0.5]
+mu = [0.5, 1.5]
 spectral_ray_trafo = spectral_projector.SpectralProjector(ray_trafo, sigma, mu)
 
 # Create a discrete Shepp-Logan phantom (modified version)
@@ -34,15 +34,15 @@ phantom.show('phantom')
 data.show('data')
 
 # Callback for solver
-callback = (odl.solvers.CallbackShow(clim=[0, 1]) &
-            odl.solvers.CallbackShow(coords=[None, 0]) &
+callback = (odl.solvers.CallbackShow(display_step=5, clim=[0, 1]) &
+            odl.solvers.CallbackShow(display_step=5, coords=[None, 0]) &
             odl.solvers.CallbackPrintIteration())
-raise Exception
-# Solve using nonlinear CG
+
+# Solve using landweber
+opnorm = odl.power_method_opnorm(ray_trafo)
 x = spectral_ray_trafo.domain.zero()
-odl.solvers.conjugate_gradient_nonlinear(spectral_ray_trafo, x, data,
-                                         niter=30, niter_reset=30,
-                                         callback=callback)
+odl.solvers.landweber(spectral_ray_trafo, x, data, omega=2.0/opnorm**2,
+                      niter=100, callback=callback)
 
 # Reset the callback so we get new plots
 callback.reset()
@@ -51,7 +51,7 @@ callback.reset()
 x = spectral_ray_trafo.domain.zero()
 for i in range(10):
     odl.solvers.conjugate_gradient_normal(spectral_ray_trafo, x, data,
-                                          niter=i, callback=callback)
+                                          niter=10, callback=callback)
 
 # Reset the callback so we get new plots
 callback.reset()
