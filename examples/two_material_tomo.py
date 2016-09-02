@@ -17,13 +17,13 @@ geometry = odl.tomo.Parallel2dGeometry(angle_partition, detector_partition)
 ray_trafo = odl.tomo.RayTransform(reco_space, geometry, impl='astra_cuda')
 
 # Scale ray trafo so we have reasonable values
-ray_trafo *= 0.4
+ray_trafo *= 0.6
 
 # Spectrum
 sigma = [0.5, 0.5]
 
 # Bone trafo
-mu = [4.0, 0.5]
+mu = [3.0, 0.5]
 bone_ray_trafo = SpectralProjector(ray_trafo, sigma, mu)
 
 # Water trafo
@@ -49,50 +49,26 @@ data.show('data')
 callback = (odl.solvers.CallbackShow(display_step=5, clim=[0, 1]) &
             odl.solvers.CallbackShow(display_step=5, coords=[None, 0]) &
             odl.solvers.CallbackPrintIteration())
-"""
-# Solve using landweber
-opnorm = odl.power_method_opnorm(ray_trafo)
-x = spectral_ray_trafo.domain.zero()
-odl.solvers.landweber(spectral_ray_trafo, x, data, omega=1.0/opnorm**2,
-                      niter=200, callback=callback)
 
-# Solve using tikhonov regularized iterative linearization
-callback.reset()
-
-
-# Solve using iterative linearization
-A = spectral_ray_trafo
-B = 0.1 * odl.IdentityOperator(spectral_ray_trafo.domain)
-x = spectral_ray_trafo.domain.zero()
-for i in range(50):
-    deriv = A.derivative(x)
-    dx = A.domain.zero()
-    rhs = deriv.adjoint(data - A(x)) - B.adjoint(B(x))
-    op = deriv.adjoint * deriv + B.adjoint * B
-
-    def callback_plus_x(dx):
-        callback(x + dx)
-
-    odl.solvers.conjugate_gradient(op, dx, rhs, niter=20,
-                                   callback=callback_plus_x)
-    x += dx
-"""
 # Using douglas rachford
 
 # Get step lengths
 opnorm_A = odl.power_method_opnorm(2 * ray_trafo, xstart=shepp_logan)
-sigma = [1.0 / opnorm_A**2, 1.0]
+sigma = [1.0 / opnorm_A**2, 1.0, 1.0]
 tau = 1.0
 
 A = spectral_ray_trafo
-B = odl.IdentityOperator(spectral_ray_trafo.domain)
+ident = odl.IdentityOperator(spectral_ray_trafo.domain)
 x = A.domain.zero()
-for i in range(10):
+for i in range(100):
     deriv = A.derivative(x)
-    lin_ops = [deriv, B]
+    B = odl.ReductionOperator(odl.MultiplyOperator(x[1]),
+                              odl.MultiplyOperator(x[0]))
+    lin_ops = [deriv, B, ident]
 
     prox_cc_g = [odl.solvers.proximal_cconj_l2(spectral_ray_trafo.range, g=data - A(x)),
-                 odl.solvers.proximal_cconj_l1(spectral_ray_trafo.domain, lam=0.001, g=-x)]
+                 odl.solvers.proximal_cconj_l2(B.range, lam=1.0, g=-x[0]*x[1]),
+                 odl.solvers.proximal_cconj_l2(spectral_ray_trafo.domain, lam=1)]
 
     # Proximal of the bound constraint 0 <= x + dx <= infty
     prox_f = odl.solvers.proximal_box_constraint(spectral_ray_trafo.domain, lower=-x)
@@ -103,7 +79,7 @@ for i in range(10):
     # Solve using the Douglas-Rachford Primal-Dual method
     dx = A.domain.zero()
     odl.solvers.douglas_rachford_pd(dx, prox_f, prox_cc_g, lin_ops,
-                                    tau=tau, sigma=sigma, niter=30,
+                                    tau=tau, sigma=sigma, niter=20,
                                     callback=callback_plus_x)
 
     x += dx

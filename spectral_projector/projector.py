@@ -54,7 +54,6 @@ class SpectralProjector(odl.Operator):
         >>> mu = [0.5, 1.5]
         >>> SpectralProjector(ray_trafo, sigma, mu)
         """
-        odl.tomo.RayTransform
         self.ray_transform = ray_transform
         self.mu = np.atleast_1d(mu)
         self.sigma = np.atleast_1d(sigma)
