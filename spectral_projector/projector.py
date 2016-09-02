@@ -56,8 +56,8 @@ class SpectralProjector(odl.Operator):
         """
         odl.tomo.RayTransform
         self.ray_transform = ray_transform
-        self.mu = np.asarray(mu)
-        self.sigma = np.asarray(sigma)
+        self.mu = np.atleast_1d(mu)
+        self.sigma = np.atleast_1d(sigma)
         odl.Operator.__init__(self, ray_transform.domain, ray_transform.range,
                               linear=False)
 
